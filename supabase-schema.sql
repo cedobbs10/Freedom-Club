@@ -443,3 +443,61 @@ create policy "Users can insert own share events"
 create policy "Users can view own share events"
   on public.share_events for select
   using (auth.uid() = user_id);
+
+-- ── 8. profile_query_log ───────────────────────────────────────────────────────
+-- Privacy audit trail: records when a manufacturer query matched a user's
+-- anonymous profile. Shows members their data was "used" (no PII revealed).
+create table if not exists public.profile_query_log (
+  id              uuid primary key default uuid_generate_v4(),
+  user_id         uuid not null references public.profiles(id) on delete cascade,
+  brand_name      text not null,
+  queried_at      timestamptz not null default now()
+);
+
+create index idx_profile_query_log_user_id on public.profile_query_log(user_id);
+
+alter table public.profile_query_log enable row level security;
+
+create policy "Users can view own query log"
+  on public.profile_query_log for select
+  using (auth.uid() = user_id);
+
+-- ── Aggregate profile stats function ──────────────────────────────────────────
+-- Manufacturer-facing: returns de-identified segment counts.
+-- Called by /app/actions/profile.ts getAggregateProfileStats().
+-- Parameters:
+--   p_zip_prefix — first 3 digits of zip (e.g. '334' matches 33401-33499)
+--   p_interest   — interest category (e.g. 'Technology')
+
+create or replace function public.get_aggregate_profile_stats(
+  p_zip_prefix text default null,
+  p_interest   text default null
+)
+returns table (
+  age_range    text,
+  income_range text,
+  sex          text,
+  member_count bigint
+)
+language sql stable security definer
+set search_path = ''
+as $$
+  select
+    ap.age_range::text,
+    ap.income_range::text,
+    ap.sex::text,
+    count(*)::bigint as member_count
+  from public.anonymous_profiles ap
+  join public.profiles p on p.id = ap.user_id
+  where
+    p.subscription_status = 'active'
+    and ap.age_range    is not null
+    and ap.income_range is not null
+    and (p_zip_prefix is null or ap.zip_code like p_zip_prefix || '%')
+    and (p_interest   is null or p_interest = any(ap.interests))
+  group by ap.age_range, ap.income_range, ap.sex
+  order by member_count desc;
+$$;
+
+grant execute on function public.get_aggregate_profile_stats(text, text)
+  to service_role;

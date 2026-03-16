@@ -4,7 +4,7 @@ import DashboardSignOut from "@/components/DashboardSignOut";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
-  activeTab?: "home" | "videos" | "referrals" | "profile";
+  activeTab?: "home" | "videos" | "referrals" | "profile" | "privacy";
 }
 
 const navLinks = [
@@ -12,6 +12,7 @@ const navLinks = [
   { href: "/dashboard/videos",    label: "Watch Videos", tab: "videos"    },
   { href: "/dashboard/referrals", label: "Referrals",    tab: "referrals" },
   { href: "/dashboard/profile",   label: "Profile",      tab: "profile"   },
+  { href: "/dashboard/privacy",   label: "🛡️ Privacy",   tab: "privacy"   },
 ] as const;
 
 export default function DashboardLayout({ children, activeTab }: DashboardLayoutProps) {
